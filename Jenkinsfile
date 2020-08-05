@@ -2,7 +2,7 @@ pipeline {
   agent {
     label 'maven'
   }
-  // this is to trigger commit and merge to branch	
+  // this is to trigger commit and merge to branch - this is cool	
   environment {
     DEPLOY_NS_SIT = "${env.DEPLOY_NS_SIT}"
     DEPLOY_NS_UAT = "${env.DEPLOY_NS_UAT}"
