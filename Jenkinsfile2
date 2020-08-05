@@ -1,0 +1,107 @@
+pipeline {
+  agent any
+  
+  
+  
+	
+  environment {
+    DEPLOY_NS_SIT = "mapit3-sit"
+    DEPLOY_NS_UAT = "mapit3-uat"
+	  
+    // GIT_FALSE_FULL_NAME =  "${env.GIT_BRANCH,fullName=false}"
+    MY_ORI_GIT = "${env.GIT_BRANCH}"
+    // MY_NEW_GIT = MY_ORI_GIT.substring(7)
+    MY_NEW_GIT = 'MYD-7'		
+
+  }
+  stages {
+	  
+  		  
+      
+     
+    
+	  
+	  
+    // stage('Echoing valuesp') {
+    //  steps {
+    //    script {
+    //      openshift.withCluster() {
+    //        echo "DEPLOY_NS :[" + "${env.DEPLOY_NS}" + "]"
+    //        echo "Selector Project result :[" + openshift.selector('project', "${DEPLOY_NS}").exists() + "]"
+    //        echo "Selector ns result :[" + openshift.selector('ns', "${DEPLOY_NS}").exists() + "]"
+
+     //     }
+     //   }
+     // }
+    // }
+
+    
+	  
+    stage('Artifactory configuration') {
+      steps {
+        rtServer(
+        id: "ARTIFACTORY_SERVER", url: 'http://161.202.190.34:8082/artifactory/', credentialsId: "jfrog-credentials")
+
+        rtMavenDeployer(
+        id: "MAVEN_DEPLOYER", serverId: "ARTIFACTORY_SERVER", releaseRepo: "libs-release-local", snapshotRepo: "libs-snapshot-local")
+
+        rtMavenResolver(
+        id: "MAVEN_RESOLVER", serverId: "ARTIFACTORY_SERVER", releaseRepo: "libs-release", snapshotRepo: "libs-snapshot")
+      }
+    }
+
+    stage('Maven Clean App') {
+      steps {
+        rtMavenRun(
+        tool: 'maven', // Tool name from Jenkins configuration
+        pom: 'pom.xml', goals: 'clean', deployerId: "MAVEN_DEPLOYER", resolverId: "MAVEN_RESOLVER")
+      }
+    }
+
+      
+	  
+	  
+    stage('SonarQube Code Analysis') {
+
+      steps {
+        script {
+
+          //  withSonarQubeEnv('sonarscanner') {
+          // def mvnHome = tool 'maven'
+          // sh "'${mvnHome}/bin/mvn' org.sonarsource.scanner.maven:sonar-maven-plugin:3.3.0.603:sonar -Dsonar.host.url=$SONAR_HOST_URL  -Dsonar.projectKey=${JOB_NAME} -Dsonar.projectName=${JOB_NAME} -Dsonar.language=java -Dsonar.sources=. -Dsonar.java.binaries=target -Dsonar.tests=. -Dsonar.test.inclusions=**/*Test*/* -Dsonar.exclusions=target/**/*.class"
+          // }
+          withMaven(maven: 'maven') {
+            sh "mvn sonar:sonar -Dsonar.language=java -Dsonar.java.binaries=target"
+          }
+
+        }
+
+      }
+    }
+
+    stage('Maven Install App') {
+      steps {
+        rtMavenRun(
+        tool: 'maven', // Tool name from Jenkins configuration
+        pom: 'pom.xml', goals: 'install', deployerId: "MAVEN_DEPLOYER", resolverId: "MAVEN_RESOLVER")
+      }
+    }
+
+   stage('Twistlock') {
+      steps {
+
+               prismaCloudScanImage ca: '', cert: '', dockerAddress: 'unix:///var/run/docker.sock', image: 'mapit3/*', key: '', logLevel: 'info', podmanPath: '', project: '', resultsFile: 'prisma-cloud-scan-results.json'
+			}
+	}
+   
+   stage('Nexus IQ ') {
+      steps {
+              echo 'Nexus IQ ..'
+	      nexusPolicyEvaluation advancedProperties: '', failBuildOnNetworkError: false, iqApplication: selectedApplication('sandbox-application'), iqStage: 'build', jobCredentialsId: ''
+       }
+   }
+	   
+
+  
+  } 
+}	
